@@ -85,18 +85,6 @@ cl_data = compute_cmb_cl(params)
 emulator = PolyEmu(params, cl_data, forward=True, backward=False)
 ```
 
-## 📖 Citation
-
-If you use these examples in your research, please cite:
-
-```bibtex
-@article{Zhang2025MomentEmu,
-  title={MomentEmu: A lightweight, interpretable polynomial emulator for smooth mappings},
-  author={Zhang, Your Name},
-  journal={arXiv preprint arXiv:2507.02179},
-  year={2025}
-}
-```
 
 ## 🔗 Related Links
 
