@@ -3,8 +3,6 @@ import os
 from MomentEmu import *
 import camb
 
-# Add this at the VERY TOP of theory_polycamb.py
-sys.path.append("/Users/zzhang/Workspace/MomentEmu")
 
 import numpy as np
 from cobaya.theory import Theory
@@ -32,7 +30,7 @@ class rawCAMB(Theory):
     """
 
     # Set ℓ_max of the emulator 
-    ell_max_emulator = 2510
+    ell_max_emulator = 4000
     ells = np.arange(2, ell_max_emulator + 1)
     ell_factors = 2 * np.pi / (ells * (ells + 1)) #/ (2.7255**2 * 1e12)    # muK2 --> FIRASK2 convention
 
@@ -41,44 +39,53 @@ class rawCAMB(Theory):
         
 
     def get_requirements(self):
-        return ['omega_b', 'omega_c', 'H0', 'logA', 'ns', 'tau'] 
+        return ['omega_b', 'omega_c', 'theta_star', 'logA', 'ns', 'tau'] 
     
-    def get_Cl(self, lmax=2510, **kwargs):
+    def get_Cl(self, ell_max=4000, **kwargs):
         pars = camb.CAMBparams()
         params = self.provider
 
         omb = params.get_param("omega_b")
         omc = params.get_param("omega_c")
-        H0 = params.get_param("H0")
+        thetastar = params.get_param("theta_star")
         logA = params.get_param("logA")
         ns = params.get_param("ns")
         tau =params.get_param("tau")
 
         # Set cosmological parameters
-        pars.set_cosmology(H0=H0, ombh2=omb, omch2=omc, tau=tau)
+        pars.set_cosmology(thetastar=thetastar, ombh2=omb, omch2=omc, tau=tau)
 
         # Initial power spectrum parameters
         As_arr = invert_log_As(logA)
         pars.InitPower.set_params(As=As_arr, ns=ns)
 
         # Compute lensed CMB power spectra up to lmax
-        pars.set_for_lmax(lmax, lens_potential_accuracy=0)
+        pars.set_for_lmax(ell_max, lens_potential_accuracy=2)
         results = camb.get_results(pars)
         powers = results.get_cmb_power_spectra(pars, CMB_unit='muK')
 
         # Extract total TT spectrum (including lensing)
-        CLtt = powers['total'][2: self.ell_max_emulator + 1, 0]
-        CLtt *= self.ell_factors
+        D_ell_TT = powers['total'][2: self.ell_max_emulator + 1, 0]
+        D_ell_EE = powers['total'][2: self.ell_max_emulator + 1, 1]
+        D_ell_TE = powers['total'][2: self.ell_max_emulator + 1, 3]
 
-        if lmax > self.ell_max_emulator:
-            pad_len = lmax - self.ell_max_emulator
-            CLtt = np.concatenate([CLtt, np.zeros(pad_len)])
+        
 
-        return {"tt": CLtt} 
+        C_ell_TT = D_ell_TT * self.ell_factors
+        C_ell_EE = D_ell_EE * self.ell_factors
+        C_ell_TE = D_ell_TE * self.ell_factors
+
+        if ell_max > self.ell_max_emulator:
+            pad_len = ell_max - self.ell_max_emulator
+            C_ell_TT = np.concatenate([C_ell_TT, np.zeros(pad_len)])
+            C_ell_EE = np.concatenate([C_ell_EE, np.zeros(pad_len)])
+            C_ell_TE = np.concatenate([C_ell_TE, np.zeros(pad_len)])
+
+        return {"tt": C_ell_TT, "ee": C_ell_EE, "te": C_ell_TE}
 
 
     def get_can_provide(self):
-        return {"Cl": ["tt"]}
+        return {"Cl": ["tt", "ee", "te"]}
 
     def must_provide(self, **_):
         return {}

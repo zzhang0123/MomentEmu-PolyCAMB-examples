@@ -13,7 +13,9 @@ from itertools import product
 demo_bounds = {
     'ombh2':   (0.019, 0.025),
     'omch2':   (0.09, 0.15),
-    'H0':      (55.0, 80.0),
+    # 'H0':      (55.0, 80.0),
+    # Use acoustic-scale parameter: theta_star (Planck ~ 1.041)
+    'thetastar': (0.0100,  0.0108),
     'ln_1e10_As':(2.7, 3.2),
     'ns':      (0.88, 1.02),
     'tau':     (0.02, 0.12)
@@ -37,8 +39,10 @@ def sample_lcdm_params_grid(n_grid_per_param=5, return_DataFrame=False, bound=No
     Generate a Cartesian product grid over ΛCDM parameters.
 
     Parameters:
-        n_grid_per_param : int
-            Number of grid points per parameter (uniform for all).
+        n_grid_per_param : int or array-like
+            Number of grid points per parameter. If int, uniform for all parameters.
+            If array-like, should have length equal to number of parameters,
+            specifying grid points for each parameter individually.
         return_DataFrame : bool
             If True, return a dictionary of arrays by parameter name.
 
@@ -57,12 +61,23 @@ def sample_lcdm_params_grid(n_grid_per_param=5, return_DataFrame=False, bound=No
         param_bounds = demo_bounds
     
     param_names = list(param_bounds.keys())
+    
+    # Handle both single integer and array inputs
+    if np.isscalar(n_grid_per_param):
+        # Use same number of grid points for all parameters
+        grid_sizes = [n_grid_per_param] * len(param_names)
+    else:
+        # Use different number of grid points for each parameter
+        grid_sizes = list(n_grid_per_param)
+        if len(grid_sizes) != len(param_names):
+            raise ValueError(f"Length of n_grid_per_param ({len(grid_sizes)}) must match "
+                           f"number of parameters ({len(param_names)})")
 
     # Create grid arrays for each parameter
     param_grids = []
-    for name in param_names:
+    for i, name in enumerate(param_names):
         low, high = param_bounds[name]
-        grid = np.linspace(low, high, n_grid_per_param, endpoint=True)
+        grid = np.linspace(low, high, grid_sizes[i], endpoint=True)
         param_grids.append(grid)
 
     # Cartesian product of grid points
@@ -121,7 +136,7 @@ def sample_lcdm_params_rand(n_samples=1000, seed=None, return_DataFrame=False, u
         param_array = {
             'ombh2':        scaled_samples[:, 0],
             'omch2':        scaled_samples[:, 1],
-            'H0':           scaled_samples[:, 2],
+            'thetastar':    scaled_samples[:, 2],
             'ln_1e10_As':   scaled_samples[:, 3],
             'ns':           scaled_samples[:, 4],
             'tau':          scaled_samples[:, 5]
@@ -132,72 +147,120 @@ def sample_lcdm_params_rand(n_samples=1000, seed=None, return_DataFrame=False, u
     return scaled_samples, param_names
 
 
-def get_aps(theta, lmax=2000):
-    pars = camb.CAMBparams()
+def get_aps(theta, lmax=4000, lens_accuracy=2):
+    try:
+        pars = camb.CAMBparams()
 
-    # Set cosmological parameters
-    pars.set_cosmology(H0=theta['H0'], ombh2=theta['ombh2'], omch2=theta['omch2'], tau=theta['tau'])
+        # Set cosmological parameters
+        pars.set_cosmology(thetastar=theta['thetastar'], ombh2=theta['ombh2'], omch2=theta['omch2'], tau=theta['tau'])
 
-    # Initial power spectrum parameters
-    As_arr = invert_log_As(theta['ln_1e10_As'])
-    pars.InitPower.set_params(As=As_arr, ns=theta['ns'])
+        # Initial power spectrum parameters
+        As_arr = invert_log_As(theta['ln_1e10_As'])
+        pars.InitPower.set_params(As=As_arr, ns=theta['ns'])
 
-    # Compute lensed CMB power spectra up to lmax
-    pars.set_for_lmax(lmax, lens_potential_accuracy=0)
-    results = camb.get_results(pars)
-    powers = results.get_cmb_power_spectra(pars, CMB_unit='muK')
+        # Compute lensed CMB power spectra up to lmax
+        pars.set_for_lmax(lmax, lens_potential_accuracy=lens_accuracy)
+        results = camb.get_results(pars)
+        powers = results.get_cmb_power_spectra(pars, CMB_unit='muK')
 
-    # Extract total TT spectrum (including lensing)
-    totCL = powers['total']
-    ell = np.arange(totCL.shape[0])
+        # Extract total TT spectrum (including lensing)
+        totCL = powers['total']
+        ell = np.arange(totCL.shape[0])
 
-    return ell, totCL[:, 0]  # Return (ℓ, C_ℓ^TT)
+        TT = totCL[:, 0]  # TT spectrum
+        EE = totCL[:, 1]  # EE spectrum
+        BB = totCL[:, 2]  # BB spectrum
+        TE = totCL[:, 3]  # TE spectrum
+
+        return ell, TT, EE, BB, TE
+    
+    except (camb.CAMBParamRangeError, ValueError) as e:
+        # Return None for failed parameter combinations
+        print(f"CAMB failed for params: {dict(theta)}")
+        return None
+
+def generate_CAMB_aps_TT(params_list, lmax=4000, use_theta=True):
+    """
+    Generate the CMB power spectra (or peaks) for a list of sets of cosmological parameters.
+    """
+    N_samples = len(params_list)
+
+    result_TT = []
+
+    for i in range(N_samples):
+        ombh2 = params_list[i, 0]
+        omch2 = params_list[i, 1]
+        third = params_list[i, 2]
+        ln10As = params_list[i, 3]
+        As = np.exp(ln10As)*1e-10
+        ns = params_list[i, 4]
+        tau = params_list[i, 5]
+        pars = camb.CAMBparams()
+
+        if use_theta:
+            # third is 100*theta_MC
+            pars.set_cosmology(cosmomc_theta=third, ombh2=ombh2, omch2=omch2, tau=tau)
+        else:
+            # third is H0 [km/s/Mpc]
+            pars.set_cosmology(H0=third, ombh2=ombh2, omch2=omch2, tau=tau)
+        pars.InitPower.set_params(As=As, ns=ns)
+        pars.set_for_lmax(lmax, lens_potential_accuracy=2)
+        # Run the calculation
+        results = camb.get_results(pars)
+        powers = results.get_cmb_power_spectra(pars, CMB_unit='muK')
+        result_TT.append(powers['total'][:,0])
+
+    return np.array(result_TT)
 
 
-def generate_dataset(N, lmax=3000, ell_sampling=None, grid=True, bound=None):
+def generate_dataset(N, lmax=4000, grid=True, bound=None):
     """
     Generate a dataset of CMB power spectra using CAMB.
     Parameters:
-    - N: number of simulations if grid=False, otherwise number per dimmension.
+    - N: number of simulations if grid=False, otherwise number per dimension if grid=True.
+         For grid=True, N can be int (uniform grid size) or array-like (different size per parameter).
     - lmax: maximum multipole to compute
-    - ell_sampling: 'log' for log-sampling ℓ, 'linear' for linear sampling
     - grid: if True, use grid sampling, otherwise use random sampling.
     Returns:
     - X: parameters (N x 6)
     - Y: CMB power spectra (N x len(ells))
     - param_names: list of parameter names
-    - ell_sampled: sampled ℓ values
     """
     if grid:
-        params = sample_lcdm_params_grid(n_grid_per_param=N, return_DataFrame=True, bound=None)
+        params = sample_lcdm_params_grid(n_grid_per_param=N, return_DataFrame=True, bound=bound)
         N = len(params)
     else:
-        params = sample_lcdm_params_rand(N, seed=42, return_DataFrame=True, bound=None)
+        params = sample_lcdm_params_rand(N, seed=42, return_DataFrame=True, bound=bound)
 
-    # Optional: log-sample ℓ to reduce data dimensionality
-    if ell_sampling == 'log':
-        ell_sampled = np.unique(np.round(np.exp(np.linspace(np.log(2), np.log(lmax), 200))).astype(int))
-        ell_sampled = ell_sampled[ell_sampled <= lmax]
+    # # Optional: log-sample ℓ to reduce data dimensionality
+    # if ell_sampling == 'log':
+    #     ell_sampled = np.unique(np.round(np.exp(np.linspace(np.log(2), np.log(lmax), 200))).astype(int))
+    #     ell_sampled = ell_sampled[ell_sampled <= lmax]
 
-    Cls_all = []
+    Cls_TT_all = []
+    Cls_EE_all = []
+    Cls_BB_all = []
+    Cls_TE_all = []
 
     for i in tqdm(range(N), desc="Running CAMB"):
         theta = params.iloc[i]
-        ell, Cl_tt = get_aps(theta, lmax=lmax)
-        if ell_sampling is not None:
-            # Interpolate to sampled ℓs
-            Cl_sampled = np.interp(ell_sampled, ell, Cl_tt)
-            Cls_all.append(Cl_sampled)
-        else:
-            ell_sampled = ell
-            Cls_all.append(Cl_tt)
+        ell, Cl_tt, Cl_ee, Cl_bb, Cl_te = get_aps(theta, lmax=lmax)
+        # if ell_sampling is not None:
+        #     # Interpolate to sampled ℓs
+        #     Cl_sampled = np.interp(ell_sampled, ell, Cl_tt)
+        #     Cls_all.append(Cl_sampled)
+        # else:
+        ell_sampled = ell
+        Cls_TT_all.append(Cl_tt)
+        Cls_EE_all.append(Cl_ee)
+        Cls_BB_all.append(Cl_bb)
+        Cls_TE_all.append(Cl_te)
 
     # Final array: (N samples) x (len(ell_sampled) features)
     X = params.to_numpy()
-    Y = np.array(Cls_all)
     param_names = params.columns.tolist()
 
-    return X, Y, param_names, ell_sampled
+    return X, np.array(Cls_TT_all), np.array(Cls_EE_all), np.array(Cls_BB_all), np.array(Cls_TE_all), param_names, ell_sampled
 
 ### Functions for finding features of the angular power spectra ###
 

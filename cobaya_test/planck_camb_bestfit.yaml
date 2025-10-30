@@ -1,0 +1,24 @@
+theory:
+  my_polycamb:
+    class: theory_camb.rawCAMB
+    python_path: /Users/zzhang/Workspace/MomentEmu-PolyCAMB-examples/cobaya_test
+    
+
+
+likelihood:
+  planck_2018_lowl.TT: null
+  planck_2018_lowl.EE: null
+  planck_2018_highl_plik.TTTEEE_lite: null
+
+sampler: null
+
+params:
+  omega_b:        {prior: {min: 0.01,  max: 0.03}}
+  omega_c:        {prior: {min: 0.05,  max: 0.2}}
+  theta_star:     {prior: {min: 1,    max: 1.08}}
+  ns:             {prior: {min: 0.8,   max: 1.2}}
+  tau:            {prior: {min: 0.01,  max: 0.2}}
+  logA:           {prior: {min: 2.0,   max: 4.2}}   # ln(10^10 A_s)
+
+  A_planck:       {prior: {min: 0.9,   max: 1.1}}
+

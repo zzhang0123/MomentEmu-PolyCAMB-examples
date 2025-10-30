@@ -1,0 +1,46 @@
+
+theory:
+  my_polycamb:
+    class: theory_polycamb_pol.PolyCAMB
+    python_path: /Users/zzhang/Workspace/MomentEmu-PolyCAMB-examples/cobaya_test
+
+
+likelihood:
+  planck_2018_lowl.TT_clik:  
+    clik_file: /Users/zzhang/Workspace/MomentEmu-PolyCAMB-examples/planck_2018/plc_3.0/low_l/commander/commander_dx12_v3_2_29.clik
+  planck_2018_lowl.EE_clik:
+    clik_file: /Users/zzhang/Workspace/MomentEmu-PolyCAMB-examples/planck_2018/plc_3.0/low_l/simall/simall_100x143_offlike5_EE_Aplanck_B.clik
+  planck_2018_highl_plik.TTTEEE:
+    clik_file: /Users/zzhang/Workspace/MomentEmu-PolyCAMB-examples/planck_2018/plc_3.0/hi_l/plik/plik_rd12_HM_v22b_TTTEEE.clik
+
+sampler: null
+
+params:
+  omega_b:        {prior: {min: 0.01,  max: 0.03}}
+  omega_c:        {prior: {min: 0.05,  max: 0.2}}
+  theta_star:     {prior: {min: 1,    max: 1.08}}
+  ns:             {prior: {min: 0.8,   max: 1.2}}
+  tau:            {prior: {min: 0.01,  max: 0.2}}
+  logA:           {prior: {min: 2.0,   max: 4.2}}   # ln(10^10 A_s)
+
+  A_planck:       {prior: {min: 0.9,   max: 1.1}}
+  calib_100T:     {prior: {min: 0.9,   max: 1.1}}
+  calib_217T:     {prior: {min: 0.9,   max: 1.1}}
+  A_cib_217:      {prior: {min: 0.0,   max: 200.0}}
+  xi_sz_cib:      {prior: {min: -1.0,  max: 1.0}}
+  A_sz:           {prior: {min: 0.0,   max: 10.0}}
+  ksz_norm:       {prior: {min: 0.0,   max: 10.0}}
+  gal545_A_100:   {prior: {min: 0.0,   max: 50.0}}
+  gal545_A_143:   {prior: {min: 0.0,   max: 80.0}}
+  gal545_A_143_217:{prior:{min: 0.0,   max: 200.0}}
+  gal545_A_217:   {prior: {min: 0.0,   max: 300.0}}
+  ps_A_100_100:   {prior: {min: 0.0,   max: 400.0}}
+  ps_A_143_143:   {prior: {min: 0.0,   max: 200.0}}
+  ps_A_143_217:   {prior: {min: 0.0,   max: 200.0}}
+  ps_A_217_217:   {prior: {min: 0.0,   max: 400.0}}
+  galf_TE_A_100:        {prior: {min: 0.0, max: 10.0}}
+  galf_TE_A_100_143:    {prior: {min: 0.0, max: 10.0}}
+  galf_TE_A_100_217:    {prior: {min: 0.0, max: 10.0}}
+  galf_TE_A_143:        {prior: {min: 0.0, max: 10.0}}
+  galf_TE_A_143_217:    {prior: {min: 0.0, max: 10.0}}
+  galf_TE_A_217:        {prior: {min: 0.0, max: 10.0}}

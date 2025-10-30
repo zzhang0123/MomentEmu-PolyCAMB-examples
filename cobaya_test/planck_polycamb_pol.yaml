@@ -1,0 +1,130 @@
+# ===================================================================
+#  Planck 2018 TT-only inference using the MomentEmu PolyCAMB emulator
+# ===================================================================
+
+output: chains/planck_polycamb_pol      # folder for chains & logs
+debug: True                            # enable for initial runs
+
+
+# -------------------------------------------------------------------
+#  Custom theory: replaces CAMB with PolyCAMB-D_ell surrogate
+# -------------------------------------------------------------------
+theory:
+  my_polycamb:
+    class: theory_polycamb_pol.PolyCAMB
+    python_path: /Users/zzhang/Workspace/MomentEmu-PolyCAMB-examples/cobaya_test
+    
+# -------------------------------------------------------------------
+#  Planck 2018 likelihoods (TT low-ℓ + high-ℓ)
+#  High-ℓ range is capped at ℓ=2050 to match emulator training.
+# -------------------------------------------------------------------
+# likelihood:
+#   planck_2018_lowl.TT:
+#   planck_2018_lowl.EE:
+#   planck_2018_highl_plik.TTTEEE:
+#     requires:
+#       lmax: 4000  # Use your full emulator range!
+#       Cl: {tt: null, te: null, ee: null}
+
+#     clik_file: /Users/zzhang/Workspace/MomentEmu-PolyCAMB-examples/planck_2018/plc_3.0/low_l/commander/commander_dx12_v3_2_29.clik
+
+
+likelihood:
+  planck_2018_lowl.TT_clik:  # ← ADD THIS!
+    clik_file: /Users/zzhang/Workspace/MomentEmu-PolyCAMB-examples/planck_2018/plc_3.0/low_l/commander/commander_dx12_v3_2_29.clik
+  planck_2018_lowl.EE_clik:
+    clik_file: /Users/zzhang/Workspace/MomentEmu-PolyCAMB-examples/planck_2018/plc_3.0/low_l/simall/simall_100x143_offlike5_EE_Aplanck_B.clik
+  planck_2018_highl_plik.TTTEEE:
+    clik_file: /Users/zzhang/Workspace/MomentEmu-PolyCAMB-examples/planck_2018/plc_3.0/hi_l/plik/plik_rd12_HM_v22b_TTTEEE.clik
+
+# -------------------------------------------------------------------
+#  Cosmological parameters and uniform (broad) priors
+# -------------------------------------------------------------------
+params:
+  omega_b:
+    prior: {min: 0.019, max: 0.025}
+    ref: 0.02242      # Planck 2018 best fit
+    proposal: 0.00015
+    latex: '\Omega_b h^2'
+
+  omega_c:
+    prior: {min: 0.09,  max: 0.15}
+    ref: 0.11933
+    proposal: 0.0012
+    latex: '\Omega_c h^2'
+
+  theta_star:
+    prior:
+      min: 0.0100
+      max: 0.0108
+    ref: 0.01041
+    proposal: 0.00003
+    latex: '\theta_\ast'
+
+  logA:               # ln(10^{10} A_s)
+    prior: {min: 2.7, max: 3.2}
+    ref: 3.047
+    proposal: 0.016    # Wider due to tau degeneracy
+    latex: '\ln(10^{10} A_s)'
+
+  ns:
+    prior: {min: 0.88, max: 1.02}
+    ref: 0.9665
+    proposal: 0.004
+    latex: 'n_s'
+
+  tau:
+    prior: {min: 0.02, max: 0.12}
+    ref: 0.0561
+    proposal: 0.008    # Wider due to logA degeneracy
+    latex: '\tau'
+
+A_planck:
+  prior: {min: 0.9, max: 1.1}  # Conservative flat prior
+  ref: 1.0
+  proposal: 0.003
+
+
+# -------------------------------------------------------------------
+#  MCMC sampler settings
+# -------------------------------------------------------------------
+# Improved sampler settings for Planck
+sampler:
+  mcmc:
+    # Proposal learning for better convergence
+    learn_proposal: True
+    learn_proposal_Rminus1_max: 3.0
+    
+    # Convergence criteria
+    Rminus1_stop: 0.02
+    Rminus1_cl_stop: 0.2
+    Rminus1_cl_level: 0.95    # Check 95% intervals
+    
+    # MPI-specific optimizations
+    max_samples: 200000      # Increase for MPI runs
+    check_every: 40d         # Check convergence every 40*dimensions samples
+    oversample_thin: True    # Better for MPI
+    
+    # Output settings for MPI
+    output_every: 300s       # Output progress every 5 minutes
+    measure_speeds: True     # Useful for debugging MPI performance
+    
+    # # Alternative blocking format (if you want to try)
+    # blocking:
+    #   - ["omega_b", "omega_c", "theta_star", "ns"]  # Use quotes
+    #   - ["logA", "tau"]                        # Highly correlated pair
+    
+    # Standard settings
+    proposal_scale: 2.4  # Standard for 6D
+    oversample_power: 0.4
+    drag: True                    # Enable dragging
+    drag_limits: [0.05, 0.25]   # Min/max fraction for dragging steps
+
+# -------------------------------------------------------------------
+#  Post-processing: GetDist corner plot and tables
+# -------------------------------------------------------------------
+# post:
+#   suffix: ".txt"
+#   getdist:
+#     params: [omega_b, omega_c, theta_star, logA, ns, tau]  # Changed H0 to theta_star
+#     contour: [0.68, 0.95]
